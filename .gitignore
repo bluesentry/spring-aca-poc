@@ -1,0 +1,18 @@
+# Ignore Terraform files
+*.tfstate
+*.tfstate.*
+*.backup
+
+# Ignore CLI configuration files
+.terraformrc
+terraform.rc
+
+# Ignore crash log files
+crash.log
+
+# Ignore sensitive variable files
+*.tfvars
+*.tfvars.json
+
+.terraform*
+.terraform/**
