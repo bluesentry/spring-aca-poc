@@ -14,6 +14,9 @@ resource "azurerm_storage_account" "mikeo" {
   location                 = azurerm_resource_group.mikeo.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
+  tags = {
+    pmtest = "policytest"
+  }
 }
 
 resource "azurerm_container_registry" "mikeo" {
@@ -25,7 +28,7 @@ resource "azurerm_container_registry" "mikeo" {
 }
 
 resource "azurerm_key_vault" "mikeo" {
-  name                = "mikeokeyvault"
+  name                = "mikeokeyvault2"
   resource_group_name = azurerm_resource_group.mikeo.name
   location            = azurerm_resource_group.mikeo.location
   sku_name            = "standard"
@@ -64,18 +67,42 @@ resource "azurerm_container_app" "mikeo" {
   template {
     container {
       name   = "mikeo-container"
-      image  = "${azurerm_container_registry.mikeo.login_server}/mikeo-image:latest"
+      image  = "${azurerm_container_registry.mikeo.login_server}/myapp:latest"
       cpu    = 0.25
       memory = "0.5Gi"
+      # registry {
+      #   server               = azurerm_container_registry.acr.login_server
+      #   username             = azurerm_container_registry.acr.admin_username
+      #   password_secret_name = "registry"
+      # }
     }
   }
+  registry {
+    server               = azurerm_container_registry.mikeo.login_server
+    username             = azurerm_container_registry.mikeo.admin_username
+    password_secret_name = "registry"    
+  }
 
+  secret {
+    name  = "registry"
+    value = azurerm_container_registry.mikeo.admin_password
+  }
+
+  ingress {
+    external_enabled = true
+    target_port      = 8080
+    transport        = "auto"
+    traffic_weight {
+      percentage      = 100
+      latest_revision = true
+    }
+  }
   identity {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.mikeo.id]
   }
 
-  depends_on = [ azurerm_role_assignment.acr_pull ]
+  depends_on = [azurerm_role_assignment.acr_pull, azurerm_key_vault_secret.reg_pw]
 }
 
 data "azurerm_client_config" "mikeo" {}
@@ -94,7 +121,19 @@ resource "azurerm_user_assigned_identity" "mikeo" {
 }
 
 resource "azurerm_role_assignment" "acr_pull" {
-  principal_id          = azurerm_user_assigned_identity.mikeo.principal_id
-  role_definition_name  = "AcrPull"
-  scope                 = azurerm_container_registry.mikeo.id
+  for_each             = { AcrPull = "", Reader = "" }
+  principal_id         = azurerm_user_assigned_identity.mikeo.principal_id
+  role_definition_name = each.key
+  scope                = azurerm_container_registry.mikeo.id
 }
+
+resource "azurerm_key_vault_secret" "reg_pw" {
+  key_vault_id = azurerm_key_vault.mikeo.id
+  name         = "mikeoregistry-pw"
+  value        = azurerm_container_registry.mikeo.admin_password
+}
+
+# notes
+# running TF as myself
+# added secrets privs to myself (legacy policy model)
+# added secrets privs to idnetity (legacy policy model)
