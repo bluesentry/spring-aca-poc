@@ -102,7 +102,7 @@ resource "azurerm_container_app" "mikeo" {
     identity_ids = [azurerm_user_assigned_identity.mikeo.id]
   }
 
-  depends_on = [azurerm_role_assignment.acr_pull, azurerm_key_vault_secret.reg_pw]
+  depends_on = [azurerm_user_assigned_identity.mikeo, azurerm_role_assignment.acr_pull, azurerm_key_vault_secret.reg_pw]
 }
 
 data "azurerm_client_config" "mikeo" {}
@@ -137,3 +137,32 @@ resource "azurerm_key_vault_secret" "reg_pw" {
 # running TF as myself
 # added secrets privs to myself (legacy policy model)
 # added secrets privs to idnetity (legacy policy model)
+
+# Create the Event Hub Namespace
+resource "azurerm_eventhub_namespace" "mikeo_ns" {
+  name                = "mikeo-namespace"
+  location            = azurerm_resource_group.mikeo.location
+  resource_group_name = azurerm_resource_group.mikeo.name
+  sku                 = "Standard"
+  local_authentication_enabled = false  # disables access keys
+  capacity            = 1
+  tags = {
+    environment = "dev"
+  }
+}
+
+# Create the Event Hub within the namespace
+resource "azurerm_eventhub" "mikeo_hub" {
+  name                = "mikeo-eventhub"
+  namespace_name      = azurerm_eventhub_namespace.mikeo_ns.name
+  resource_group_name = azurerm_resource_group.mikeo.name
+  partition_count     = 2
+  message_retention   = 1
+}
+
+# Grant the User Assigned Identity Data Owner permissions to the Event Hub Namespace
+resource "azurerm_role_assignment" "mikeo_eventhub_data_owner" {
+  scope                = azurerm_eventhub_namespace.mikeo_ns.id
+  role_definition_name = "Azure Event Hubs Data Owner"
+  principal_id         = azurerm_user_assigned_identity.mikeo.principal_id
+}
