@@ -59,14 +59,14 @@ resource "azurerm_container_app_environment" "mikeo" {
 }
 
 resource "azurerm_container_app" "mikeo" {
-  name                         = "mikeo-app"
+  name                         = "myapp"
   container_app_environment_id = azurerm_container_app_environment.mikeo.id
   resource_group_name          = azurerm_resource_group.mikeo.name
   revision_mode                = "Single"
 
   template {
     container {
-      name   = "mikeo-container"
+      name   = "myapp"
       image  = "${azurerm_container_registry.mikeo.login_server}/myapp:latest"
       cpu    = 0.25
       memory = "0.5Gi"
